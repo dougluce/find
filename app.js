@@ -10,7 +10,7 @@ const Find = (function () {
     const self = {};
 
     self.browserId = (() => {
-        if(typeof window.browser !== 'undefined') {
+        if(typeof browser !== 'undefined') {
             return 'Firefox';
         } else {
             return 'Chrome';

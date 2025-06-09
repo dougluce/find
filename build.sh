@@ -4,7 +4,7 @@ ME=$0
 ROOT_DIR=$PWD
 BUILD_DIR="$ROOT_DIR/.build"
 MANIFEST="$ROOT_DIR/manifest.json"
-VERSION=
+VERSION=$(git describe --tags)
 
 # Display Usage
 function help() {
@@ -17,7 +17,7 @@ example:
 
 options:
     -m, --manifest  Alternate path of the manifest file 'manifest.json'.
-    -v, --version   New extension version number
+    -v, --version   Alternate version number
     -o, --output    Alternate build directory. Default '.build' in the current working directory
     -h, --help      Show help and exit
 EOS
@@ -90,34 +90,39 @@ fi
 # Create build directory structure
 echo "$ME: Creating the build directory structure under $BUILD_DIR..."
 rm -rf "$BUILD_DIR"
-mkdir --parents --verbose "$BUILD_DIR/chr"
-mkdir --parents --verbose "$BUILD_DIR/moz"
+mkdir -p -v "$BUILD_DIR/chr" "$BUILD_DIR/moz"
 
 # Copy project src to build directory
 echo "$ME: Copying project source files to build directory..."
-PROJECT_SRC_DIR=$(dirname "${MANIFEST}")
-for file in "$PROJECT_SRC_DIR/"*
-do
-    [[ $file = $BUILD_DIR ]] && continue
-    cp -r "$file" "$BUILD_DIR/chr"
-    cp -r "$file" "$BUILD_DIR/moz"
-done
+
+git ls-files -- ':!:.*' | xargs tar -cf -  | tee \
+  >(cd $BUILD_DIR/chr; tar -xf -) \
+  >(cd $BUILD_DIR/moz; tar -xf -) \
+  > /dev/null
 
 # Update manifest version numbers
 echo "$ME: Updating version number in manifest to $VERSION..."
-sed -i "s/\"version\": \"1\"/\"version\": \"$VERSION\"/" "$BUILD_DIR/chr/manifest.json"
-sed -i "s/\"version\": \"1\"/\"version\": \"$VERSION\"/" "$BUILD_DIR/moz/manifest_firefox.json"
+sed -i.bak "s/\"version\": \"1\"/\"version\": \"$VERSION\"/" $BUILD_DIR/{chr,moz}/manifest{,_firefox}.json
+rm -f $BUILD_DIR/{chr,moz}/manifest{,_firefox}.json.bak
+
+# Update repo URL in docs
+echo "$ME: Updating repository URL in documentation..."
+REPO=$(git config --get remote.origin.url | sed 's#https://github.com/##')
+sed -i.bak "s#%REPO%#${REPO}#" $BUILD_DIR/{chr,moz}/docs/index.html
+rm -f $BUILD_DIR/{chr,moz}/docs/index.html.bak
 
 # Package extension for chrome
 echo "$ME: Packaging extension for Chrome..."
 rm -f "$BUILD_DIR/chr/manifest_firefox.json"
-cd "$BUILD_DIR/chr"
-zip -r "$BUILD_DIR/find-chrome.zip" .
-cd "$ROOT_DIR"
+(
+  cd "$BUILD_DIR/chr"
+  zip -r "$BUILD_DIR/find-chrome.zip" .
+)
 
 # Package extension for firefox
 echo "$ME: Packaging extension for Firefox..."
 mv "$BUILD_DIR/moz/manifest_firefox.json" "$BUILD_DIR/moz/manifest.json"
-cd "$BUILD_DIR/moz"
-zip -r "$BUILD_DIR/find-firefox.zip" .
-cd "$ROOT_DIR"
+(
+  cd "$BUILD_DIR/moz"
+  zip -r "$BUILD_DIR/find-firefox.zip" .
+)
